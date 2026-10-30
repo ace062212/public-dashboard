@@ -45,7 +45,7 @@ function dustDigits(itemName) {
 }
 
 function dustUnit(itemName) {
-  return GAS_ITEMS.has(itemName) ? ' ppm' : ' ㎍/㎥';
+  return GAS_ITEMS.has(itemName) ? ' ppm' : ' µg/m³';
 }
 
 function renderSources(sources) {
@@ -111,24 +111,25 @@ function drawLine(elementId, categories, values) {
     xAxis: {
       type: 'category',
       data: categories.map((t) => `${String(t).padStart(4, '0').slice(0, 2)}:${String(t).padStart(4, '0').slice(2)}`),
-      axisLine: { lineStyle: { color: '#262d3a' } },
-      axisLabel: { color: '#8b949e', fontSize: 11 },
+      axisLine: { lineStyle: { color: '#d2d2d7' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#86868b', fontSize: 11 },
     },
     yAxis: {
       type: 'value',
       scale: true, // 0 고정 눈금이면 11~15℃ 같은 좁은 범위가 납작한 직선이 된다
       splitNumber: 4,
-      splitLine: { lineStyle: { color: '#1c2230' } },
-      axisLabel: { color: '#8b949e', fontSize: 11 },
+      splitLine: { lineStyle: { color: '#ececf0' } },
+      axisLabel: { color: '#86868b', fontSize: 11 },
     },
     series: [{
       type: 'line',
       data: values,
       smooth: true,
       symbolSize: 6,
-      lineStyle: { color: '#4da3ff', width: 2 },
-      itemStyle: { color: '#4da3ff' },
-      areaStyle: { color: 'rgba(77,163,255,0.15)' },
+      lineStyle: { color: '#0071e3', width: 2 },
+      itemStyle: { color: '#0071e3' },
+      areaStyle: { color: 'rgba(0,113,227,0.10)' },
     }],
   }, true);
 }
