@@ -37,11 +37,30 @@ function fmt(value, digits = 1) {
   return Number(value).toFixed(digits).replace(/\.0$/, '');
 }
 
+// 미세먼지/초미세먼지는 µg/m³ 정수, 기체상은 ppm 소수 셋째 자리까지가 사람이 읽는 단위다.
+const GAS_ITEMS = new Set(['O3', 'NO2', 'CO', 'SO2']);
+
+function dustDigits(itemName) {
+  return GAS_ITEMS.has(itemName) ? 3 : 0;
+}
+
+function dustUnit(itemName) {
+  return GAS_ITEMS.has(itemName) ? ' ppm' : ' ㎍/㎥';
+}
+
 function renderSources(sources) {
   const box = $('sources');
   box.innerHTML = '';
+  // 백그라운드 맵은 순서가 없으니 화면에서 쓸 순서로 고정해 읽는 위치가 흔들리지 않게 한다.
   const labels = { weather: '기상청', fineDust: '대기오염도', subway: '지하철 혼잡도' };
-  Object.entries(sources).forEach(([key, snap]) => {
+  const entries = Object.keys(labels)
+    .filter((key) => key in sources)
+    .map((key) => [key, sources[key]]);
+  if (entries.length === 0) {
+    box.innerHTML = '<div class="source-chip"><span class="dot dot-INIT"></span><span>상태 확인 중…</span></div>';
+    return;
+  }
+  entries.forEach(([key, snap]) => {
     const chip = document.createElement('div');
     chip.className = 'source-chip';
     const dot = document.createElement('span');
@@ -97,6 +116,8 @@ function drawLine(elementId, categories, values) {
     },
     yAxis: {
       type: 'value',
+      scale: true, // 0 고정 눈금이면 11~15℃ 같은 좁은 범위가 납작한 직선이 된다
+      splitNumber: 4,
       splitLine: { lineStyle: { color: '#1c2230' } },
       axisLabel: { color: '#8b949e', fontSize: 11 },
     },
@@ -141,7 +162,7 @@ function renderDust(feed, itemName) {
     const grade = document.createElement('span');
     grade.className = `grade ${GRADE_CLASS[r.grade] || ''}`;
     grade.textContent = r.grade || '-';
-    val.append(grade, document.createTextNode(` ${fmt(r.value, 3)}`));
+    val.append(grade, document.createTextNode(` ${fmt(r.value, dustDigits(itemName))}${dustUnit(itemName)}`));
     li.append(name, bar, val);
     list.append(li);
   });
@@ -191,12 +212,10 @@ function render(data) {
 
 async function load() {
   try {
-    const [data, sources] = await Promise.all([
-      getJson('/api/dashboard'),
-      getJson('/api/health/upstreams'),
-    ]);
+    // 상태 칩은 실제 호출이 일어난 뒤에만 값이 채워지므로, 화면 데이터를 먼저 받고 조회한다.
+    const data = await getJson('/api/dashboard');
     render(data);
-    renderSources(sources);
+    renderSources(await getJson('/api/health/upstreams'));
   } catch (e) {
     $('updated-at').textContent = '조회 실패';
     $('foot-note').textContent = e.message;
