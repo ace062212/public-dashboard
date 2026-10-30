@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>서울 실시간 대시보드</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>서울 실시간 대시보드</h1>
+      <p class="sub">기상청 단기예보 · 환경부 대기오염도 · 서울교통공사 역사 혼잡도</p>
+    </div>
+    <div class="topbar-right">
+      <span id="updated-at" class="muted">불러오는 중…</span>
+      <button id="refresh-btn" type="button">새로고침</button>
+    </div>
+  </header>
+
+  <section id="sources" class="sources" aria-label="데이터 소스 상태"></section>
+
+  <main class="grid">
+    <article class="card span-2">
+      <header class="card-head">
+        <h2>오늘 날씨</h2>
+        <span id="weather-source" class="badge"></span>
+      </header>
+      <div class="weather-top">
+        <div class="temp" id="temp">--<span class="unit">℃</span></div>
+        <dl class="kv">
+          <div><dt>체감</dt><dd id="feels">-</dd></div>
+          <div><dt>강수확률</dt><dd id="pop">-</dd></div>
+          <div><dt>하늘</dt><dd id="sky">-</dd></div>
+          <div><dt>예보시각</dt><dd id="fcst-at">-</dd></div>
+        </dl>
+      </div>
+      <div id="weather-chart" class="chart"></div>
+    </article>
+
+    <article class="card">
+      <header class="card-head">
+        <h2>권역별 미세먼지</h2>
+        <span id="dust-source" class="badge"></span>
+      </header>
+      <div class="segmented" role="tablist" aria-label="오염물질 선택">
+        <button type="button" class="seg active" data-item="PM10">PM10</button>
+        <button type="button" class="seg" data-item="PM25">PM25</button>
+        <button type="button" class="seg" data-item="O3">O3</button>
+        <button type="button" class="seg" data-item="NO2">NO2</button>
+      </div>
+      <ul id="dust-list" class="rows"></ul>
+    </article>
+
+    <article class="card span-3">
+      <header class="card-head">
+        <h2>지하철 역사 혼잡도</h2>
+        <span id="subway-source" class="badge"></span>
+      </header>
+      <form id="subway-form" class="subway-filter">
+        <input id="subway-input" type="search" placeholder="역 이름으로 좁히기 (예: 강남)" maxlength="30" autocomplete="off">
+        <button type="submit">검색</button>
+      </form>
+      <ul id="subway-list" class="rows wide"></ul>
+    </article>
+  </main>
+
+  <footer class="foot">
+    <span id="foot-note" class="muted"></span>
+  </footer>
+</body>
+</html>

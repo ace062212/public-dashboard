@@ -1,0 +1,42 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: public-dashboard
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: false
+
+logging:
+  level:
+    com.selim.dashboard: INFO
+
+public-data:
+  # 서비스 키가 비어 있을 때 더미 데이터로 응답한다. false 로 바꾸면 키 없이는 기동 실패.
+  mock-when-key-missing: ${PUBLIC_DATA_MOCK_WHEN_KEY_MISSING:true}
+  connect-timeout: ${PUBLIC_DATA_CONNECT_TIMEOUT:3s}
+  read-timeout: ${PUBLIC_DATA_READ_TIMEOUT:5s}
+  # 캐시 TTL 과 백그라운드 갱신 주기
+  cache-ttl: ${PUBLIC_DATA_CACHE_TTL:60s}
+  refresh-interval: ${PUBLIC_DATA_REFRESH_INTERVAL:60s}
+  weather:
+    base-url: ${WEATHER_BASE_URL:http://apis.data.go.kr}
+    path: ${WEATHER_PATH:/1360000/GetVilageFcst/getVilageFcst}
+    service-key: ${WEATHER_SERVICE_KEY:}
+    # 서울 시청 기준 격자좌표 (위경도 -> 격자 변환값)
+    nx: ${WEATHER_NX:60}
+    ny: ${WEATHER_NY:127}
+  fine-dust:
+    base-url: ${FINE_DUST_BASE_URL:http://openapi.epa.go.kr}
+    path: ${FINE_DUST_PATH:/main/service/realm/getTrend1DayRealTimeTierSR}
+    service-key: ${FINE_DUST_SERVICE_KEY:}
+    realm-code: ${FINE_DUST_REALM_CODE:11}
+  subway:
+    base-url: ${SUBWAY_BASE_URL:http://smss.seoul.go.kr:9001}
+    path: ${SUBWAY_PATH:/openapi2013/data/getCongestionStationDataInfoService/getCongestionStationDataInfo}
+    service-key: ${SUBWAY_SERVICE_KEY:}
+    line-id: ${SUBWAY_LINE_ID:02}
