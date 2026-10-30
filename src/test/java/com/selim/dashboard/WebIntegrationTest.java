@@ -39,6 +39,26 @@ class WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("리플릿은 외부 CDN 없이 로컬 자산으로 서빙된다")
+    void servesVendoredLeaflet() {
+        ResponseEntity<String> js = rest.getForEntity("/vendor/leaflet/leaflet.js", String.class);
+        ResponseEntity<String> css = rest.getForEntity("/vendor/leaflet/leaflet.css", String.class);
+
+        assertThat(js.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(js.getBody()).contains("Leaflet");
+        assertThat(css.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(css.getBody()).contains(".leaflet-container");
+    }
+
+    @Test
+    @DisplayName("메인 화면에 지도 영역과 범례가 준비되어 있다")
+    void indexHasMapSection() {
+        ResponseEntity<String> response = rest.getForEntity("/", String.class);
+
+        assertThat(response.getBody()).contains("id=\"map\"", "id=\"map-legend\"", "권역별 대기오염 지도");
+    }
+
+    @Test
     @DisplayName("API 응답은 UTF-8 한글을 유지한다")
     void apiKeepsKoreanOverHttp() {
         ResponseEntity<String> response = rest.exchange("/api/weather", HttpMethod.GET, null, String.class);

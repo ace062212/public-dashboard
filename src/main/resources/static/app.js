@@ -5,6 +5,9 @@ const state = {
   dustItem: 'PM10',
   subwayFilter: '',
   charts: {},
+  map: null,
+  mapMarkers: null,
+  mapFitted: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -46,6 +49,13 @@ function dustDigits(itemName) {
 
 function dustUnit(itemName) {
   return GAS_ITEMS.has(itemName) ? ' ppm' : ' µg/m³';
+}
+
+// 서버가 항목 한글명을 주지만 없는 응답에도 대비한다.
+const ITEM_LABEL = { PM10: '미세먼지', PM25: '초미세먼지', O3: '오존', NO2: '이산화질소', CO: '일산화탄소', SO2: '아황산가스' };
+
+function labelOf(itemName) {
+  return ITEM_LABEL[itemName] || itemName;
 }
 
 function renderSources(sources) {
@@ -236,6 +246,133 @@ function renderDust(feed, itemName) {
   });
 }
 
+/**
+ * 권역 중심 좌표. 환경부 권역명이 시·도 명칭과 같아 중심점에 마커를 올린다.
+ * 표에 없는 권역명이 오면 건너뛰고 하단 안내에 개수를 띄운다.
+ */
+const REGION_POINTS = {
+  서울: [37.5665, 126.9780],
+  부산: [35.1796, 129.0756],
+  대구: [35.8714, 128.6014],
+  인천: [37.4563, 126.7052],
+  광주: [35.1595, 126.8531],
+  대전: [36.3504, 127.3845],
+  울산: [35.5384, 129.3114],
+  세종: [36.4802, 127.2890],
+  경기: [37.2691, 127.0204],
+  강원: [37.8813, 127.7298],
+  충북: [36.6303, 127.4901],
+  충남: [36.6588, 126.6731],
+  전북: [35.8242, 127.1480],
+  전남: [34.9706, 126.4540],
+  경북: [36.5684, 128.7294],
+  경남: [35.2289, 128.6887],
+  제주: [33.4996, 126.5312],
+};
+
+const GRADE_COLOR = {
+  좋음: '#34c759', 보통: '#0071e3', 나쁨: '#ff9f0a', 매우나쁨: '#ff3b30',
+  여유: '#34c759', 혼잡: '#ff9f0a', 매우혼잡: '#ff3b30',
+};
+
+// 타일은 외부 서버를 쓰지만, 실패해도 마커는 그대로 보인다.
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+// 응답이 정식 명칭으로 오기도 해 별칭을 먼저 본다.
+const REGION_ALIASES = {
+  서울특별시: '서울', 부산광역시: '부산', 대구광역시: '대구', 인천광역시: '인천',
+  광주광역시: '광주', 대전광역시: '대전', 울산광역시: '울산', 세종특별자치시: '세종',
+  경기도: '경기', 강원도: '강원', 강원특별자치도: '강원',
+  충청북도: '충북', 충청남도: '충남', 전라북도: '전북', 전라남도: '전남',
+  경상북도: '경북', 경상남도: '경남', 제주도: '제주',
+};
+
+function normalizeRegion(name) {
+  if (!name) return null;
+  const trimmed = String(name).trim();
+  const stripped = trimmed.replace(/(특별자치시|특별자치도|특별특별시|광역시|특별시|도|시)$/, '');
+  const key = REGION_ALIASES[trimmed] || stripped;
+  if (REGION_POINTS[key]) return key;
+  return REGION_POINTS[trimmed] ? trimmed : null;
+}
+
+function regionCoord(name) {
+  const key = normalizeRegion(name);
+  return key ? REGION_POINTS[key] : null;
+}
+
+function gradeColor(grade) {
+  return GRADE_COLOR[grade] || '#c7c7cc';
+}
+
+function markerRadius(value, maxValue) {
+  if (value === null || value === undefined || !maxValue) return 9;
+  return Math.round(8 + Math.min(1, value / maxValue) * 12);
+}
+
+function renderMap(feed, itemName) {
+  const el = $('map');
+  if (!el) return;
+  if (typeof L === 'undefined') {
+    el.innerHTML = '<p class="empty">지도를 불러올 수 없습니다.</p>';
+    return;
+  }
+  if (!state.map) {
+    state.map = L.map(el, { scrollWheelZoom: false, zoomControl: true }).setView([36.5, 127.85], 6);
+    L.tileLayer(TILE_URL, { maxZoom: 18, attribution: '© OpenStreetMap contributors' })
+      .on('tileerror', () => {
+        const hint = $('map-hint');
+        if (hint) hint.hidden = false;
+      })
+      .addTo(state.map);
+    // layerGroup 과 달리 featureGroup 은 getBounds() 와 이벤트 위임을 제공한다.
+    state.mapMarkers = L.featureGroup().addTo(state.map);
+  } else {
+    state.mapMarkers.clearLayers();
+  }
+
+  const rows = (feed.items || []).filter((r) => r.itemName === itemName && r.value !== null);
+  const maxValue = rows.reduce((acc, r) => Math.max(acc, r.value), 0);
+  let skipped = 0;
+  rows.forEach((r) => {
+    const coord = regionCoord(r.regionName);
+    if (!coord) {
+      skipped += 1;
+      return;
+    }
+    const detail = `${labelOf(itemName)} ${fmt(r.value, dustDigits(itemName))}${dustUnit(itemName)}`;
+    L.circleMarker(coord, {
+      radius: markerRadius(r.value, maxValue),
+      color: '#ffffff',
+      weight: 2,
+      fillColor: gradeColor(r.grade),
+      fillOpacity: 0.95,
+    })
+      .bindTooltip(`<b>${r.regionName}</b> ${detail}`, { direction: 'top', offset: [0, -6] })
+      .bindPopup(`<div class="map-pop"><b>${r.regionName}</b><br>${detail}<br>등급 ${r.grade || '-'}`
+        + `<br><span class="muted">${r.measuredAt || ''}</span></div>`)
+      .addTo(state.mapMarkers);
+  });
+
+  const legend = $('map-legend');
+  if (!state.mapFitted && state.mapMarkers.getLayers().length > 0) {
+    // 처음 그릴 때만 데이터에 맞춘다. 이후 갱신에서 계속 맞추면 사용자가 움직인 화면이 되돌아간다.
+    state.map.fitBounds(state.mapMarkers.getBounds().pad(0.02), { maxZoom: 8 });
+    state.mapFitted = true;
+  }
+  if (legend) {
+    legend.innerHTML = ['좋음', '보통', '나쁨', '매우나쁨']
+      .map((g) => `<span class="legend-item"><i style="background:${gradeColor(g)}"></i>${g}</span>`)
+      .join('');
+  }
+  const note = $('map-note');
+  if (note) {
+    note.textContent = rows.length === 0
+      ? '표시할 실측 값이 없습니다.'
+      : `${rows.length}개 권역 · 좌표 미등록 ${skipped}개`;
+  }
+}
+
 function renderSubway(feed) {
   badge($('subway-source'), feed);
   const list = $('subway-list');
@@ -273,6 +410,7 @@ function render(data) {
   $('updated-at').textContent = `갱신 ${new Date(data.generatedAt).toLocaleTimeString('ko-KR')}`;
   renderWeather(data.weather, data.headline);
   renderDust(data.fineDust, state.dustItem);
+  renderMap(data.fineDust, state.dustItem);
   renderSubway(data.subway);
   $('foot-note').textContent =
     '목 데이터는 서비스 키 미설정 상태의 대체 값입니다. 실데이터는 WEATHER_SERVICE_KEY 등 환경 변수를 설정하세요.';
@@ -322,7 +460,10 @@ function bootstrap() {
       document.querySelectorAll('.seg').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       state.dustItem = btn.dataset.item;
-      if (state.data) renderDust(state.data.fineDust, state.dustItem);
+      if (state.data) {
+        renderDust(state.data.fineDust, state.dustItem);
+        renderMap(state.data.fineDust, state.dustItem);
+      }
     });
   });
 
@@ -333,7 +474,19 @@ function bootstrap() {
 
   window.addEventListener('resize', () => {
     Object.values(state.charts).forEach((chart) => chart.resize());
+    if (state.map) state.map.invalidateSize();
   });
+
+  // 한 화면 레이아웃은 카드 높이가 창 크기에 따라 변한다. 컨테이너가 줄면 차트/지도도 따라가야 한다.
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+      const chart = state.charts['weather-chart'];
+      if (chart) chart.resize();
+    }).observe($('weather-chart'));
+    new ResizeObserver(() => {
+      if (state.map) state.map.invalidateSize();
+    }).observe($('map'));
+  }
 
   load();
   setInterval(load, REFRESH_MS);
@@ -346,5 +499,8 @@ if (typeof document !== 'undefined') {
 
 // 노드에서 순수 함수만 꺼내 확인할 수 있게 한다.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildForecastRows, tooltipHtml, clockLabel, skyText, fmt, dustDigits, dustUnit };
+  module.exports = {
+    buildForecastRows, tooltipHtml, clockLabel, skyText, fmt, dustDigits, dustUnit,
+    regionCoord, normalizeRegion, gradeColor, markerRadius, labelOf,
+  };
 }

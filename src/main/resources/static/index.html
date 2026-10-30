@@ -7,7 +7,9 @@
   <meta name="theme-color" content="#f5f5f7">
   <title>서울 실시간 대시보드</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script defer src="/vendor/leaflet/leaflet.js"></script>
   <script defer src="/app.js"></script>
 </head>
 <body>
@@ -25,7 +27,7 @@
   <section id="sources" class="sources" aria-label="데이터 소스 상태"></section>
 
   <main class="grid">
-    <article class="card span-2">
+    <article class="card card-weather">
       <header class="card-head">
         <h2>오늘 날씨</h2>
         <span id="weather-source" class="badge"></span>
@@ -42,7 +44,7 @@
       <div id="weather-chart" class="chart"></div>
     </article>
 
-    <article class="card">
+    <article class="card card-dust">
       <header class="card-head">
         <h2>권역별 미세먼지</h2>
         <span id="dust-source" class="badge"></span>
@@ -56,7 +58,19 @@
       <ul id="dust-list" class="rows"></ul>
     </article>
 
-    <article class="card span-3">
+    <article class="card card-map">
+      <header class="card-head">
+        <h2>권역별 대기오염 지도</h2>
+        <span id="map-legend" class="legend"></span>
+      </header>
+      <div class="map-wrap">
+        <div id="map" role="img" aria-label="권역별 대기오염도 지도"></div>
+        <p id="map-hint" class="map-hint" hidden>지도 타일을 불러오지 못했습니다. 네트워크를 확인하세요.</p>
+      </div>
+      <p id="map-note" class="muted"></p>
+    </article>
+
+    <article class="card card-subway">
       <header class="card-head">
         <h2>지하철 역사 혼잡도</h2>
         <span id="subway-source" class="badge"></span>
