@@ -82,35 +82,87 @@ function renderWeather(feed, headline) {
   $('sky').textContent = headline.skyLabel || '-';
   $('fcst-at').textContent = headline.fcstDate ? `${headline.fcstDate} ${headline.fcstTime || ''}` : '-';
 
-  const series = [];
-  const seen = new Set();
-  feed.items
-    .filter((p) => p.category === 'TMP' && p.value !== null)
-    .sort((a, b) => `${a.fcstDate}${a.fcstTime}`.localeCompare(`${b.fcstDate}${b.fcstTime}`))
-    .forEach((p) => {
-      const key = p.fcstTime;
-      if (seen.has(key)) return;
-      seen.add(key);
-      series.push({ axis: key, value: p.value });
-    });
-  drawLine('weather-chart', series.map((s) => s.axis), series.map((s) => s.value));
+  drawLine('weather-chart', buildForecastRows(feed.items));
 }
 
-function drawLine(elementId, categories, values) {
+/** 시간대별로 예보 항목을 한 행으로 묶는다. 호버할 때 이 행을 통째로 보여준다. */
+function buildForecastRows(items) {
+  const rows = new Map();
+  (items || []).forEach((p) => {
+    if (!p || !p.fcstTime) return;
+    const row = rows.get(p.fcstTime) || { time: p.fcstTime };
+    row[p.category] = p.value;
+    rows.set(p.fcstTime, row);
+  });
+  return [...rows.values()].sort((a, b) => a.time.localeCompare(b.time));
+}
+
+function clockLabel(time) {
+  const padded = String(time || '').padStart(4, '0');
+  return `${padded.slice(0, 2)}:${padded.slice(2)}`;
+}
+
+const SKY_TEXT = { 1: '맑음', 2: '구름조금', 3: '구름많음', 4: '흐림' };
+
+function skyText(value) {
+  if (value === null || value === undefined) return null;
+  return SKY_TEXT[Math.round(value)] || `기타(${Math.round(value)})`;
+}
+
+/** 호버 툴팁 본문. 숫자에 단위를 붙여 무엇의 값인지 바로 알아본다. */
+function tooltipHtml(row) {
+  if (!row) return '';
+  const line = (label, value, digits, unit) => {
+    const shown = value === null || value === undefined ? '-' : `${fmt(value, digits)}${unit}`;
+    return `<div class="tt-row"><span>${label}</span><b>${shown}</b></div>`;
+  };
+  const sky = skyText(row.SKY);
+  return `<div class="tt-title">${clockLabel(row.time)}</div>`
+    + line('기온', row.TMP, 1, '℃')
+    + line('체감온도', row.TMP_FEEL, 1, '℃')
+    + line('강수확률', row.POP, 0, '%')
+    + line('습도', row.REH, 0, '%')
+    + `<div class="tt-row"><span>하늘상태</span><b>${sky === null ? '-' : sky}</b></div>`;
+}
+
+function drawLine(elementId, rows) {
   const el = $(elementId);
-  if (typeof echarts === 'undefined' || categories.length === 0) {
-    el.innerHTML = categories.length === 0 ? '<p class="empty">표시할 예보 값이 없습니다.</p>' : '';
+  if (typeof echarts === 'undefined') {
+    return;
+  }
+  if (!rows || rows.length === 0) {
+    el.innerHTML = '<p class="empty">표시할 예보 값이 없습니다.</p>';
     return;
   }
   if (!state.charts[elementId]) {
     state.charts[elementId] = echarts.init(el, null, { renderer: 'canvas' });
   }
   state.charts[elementId].setOption({
-    grid: { left: 34, right: 12, top: 18, bottom: 24 },
-    tooltip: { trigger: 'axis' },
+    grid: { left: 34, right: 14, top: 28, bottom: 24 },
+    legend: {
+      data: ['기온', '체감온도'],
+      top: 0,
+      right: 0,
+      icon: 'roundRect',
+      itemWidth: 12,
+      itemHeight: 3,
+      itemGap: 14,
+      textStyle: { color: '#86868b', fontSize: 11 },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#ffffff',
+      borderColor: '#e8e8ed',
+      borderWidth: 1,
+      padding: [10, 12],
+      extraCssText: 'border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);',
+      textStyle: { color: '#1d1d1f', fontSize: 12 },
+      axisPointer: { type: 'line', lineStyle: { color: '#d2d2d7', type: 'dashed' } },
+      formatter: (params) => tooltipHtml(rows[(Array.isArray(params) ? params[0] : params).dataIndex]),
+    },
     xAxis: {
       type: 'category',
-      data: categories.map((t) => `${String(t).padStart(4, '0').slice(0, 2)}:${String(t).padStart(4, '0').slice(2)}`),
+      data: rows.map((r) => clockLabel(r.time)),
       axisLine: { lineStyle: { color: '#d2d2d7' } },
       axisTick: { show: false },
       axisLabel: { color: '#86868b', fontSize: 11 },
@@ -122,15 +174,30 @@ function drawLine(elementId, categories, values) {
       splitLine: { lineStyle: { color: '#ececf0' } },
       axisLabel: { color: '#86868b', fontSize: 11 },
     },
-    series: [{
-      type: 'line',
-      data: values,
-      smooth: true,
-      symbolSize: 6,
-      lineStyle: { color: '#0071e3', width: 2 },
-      itemStyle: { color: '#0071e3' },
-      areaStyle: { color: 'rgba(0,113,227,0.10)' },
-    }],
+    series: [
+      {
+        name: '기온',
+        type: 'line',
+        data: rows.map((r) => (r.TMP === undefined ? null : r.TMP)),
+        smooth: true,
+        symbolSize: 6,
+        connectNulls: true,
+        z: 3,
+        lineStyle: { color: '#0071e3', width: 2 },
+        itemStyle: { color: '#0071e3' },
+        areaStyle: { color: 'rgba(0,113,227,0.10)' },
+      },
+      {
+        name: '체감온도',
+        type: 'line',
+        data: rows.map((r) => (r.TMP_FEEL === undefined ? null : r.TMP_FEEL)),
+        smooth: true,
+        symbol: 'none',
+        connectNulls: true,
+        lineStyle: { color: '#c7c7cc', width: 1.5, type: 'dashed' },
+        itemStyle: { color: '#c7c7cc' },
+      },
+    ],
   }, true);
 }
 
@@ -247,7 +314,7 @@ async function loadSubway(keyword) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootstrap() {
   $('refresh-btn').addEventListener('click', forceRefresh);
 
   document.querySelectorAll('.seg').forEach((btn) => {
@@ -270,4 +337,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   load();
   setInterval(load, REFRESH_MS);
-});
+}
+
+// 브라우저 밖(노드 검사)에서는 DOM을 건드리지 않는다.
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', bootstrap);
+}
+
+// 노드에서 순수 함수만 꺼내 확인할 수 있게 한다.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { buildForecastRows, tooltipHtml, clockLabel, skyText, fmt, dustDigits, dustUnit };
+}

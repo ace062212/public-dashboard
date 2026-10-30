@@ -160,6 +160,23 @@ button:disabled { opacity: .5; cursor: default; }
 
 .chart { height: 210px; margin-top: 18px; }
 
+/* ECharts 툴팁 본문 */
+.tt-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 2px 0;
+}
+.tt-row span { color: var(--ink-soft); }
+.tt-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* 세그먼트 컨트롤 */
 .segmented {
   display: inline-flex;
